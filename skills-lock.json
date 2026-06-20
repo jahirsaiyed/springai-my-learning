@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "tech-entrepreneur-coach-adhd": {
+      "source": "erichowens/some_claude_skills",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/tech-entrepreneur-coach-adhd/SKILL.md",
+      "computedHash": "41bb49df3dd5c95e2a301be008364151fb3414351d2945766dabeac52c2855d5"
+    }
+  }
+}

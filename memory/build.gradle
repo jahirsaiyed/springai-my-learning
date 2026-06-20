@@ -1,0 +1,23 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':core')
+
+    // Vector store
+    implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
+
+    // Redis for session cache
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // Document readers for ingestion pipeline
+    implementation 'org.springframework.ai:spring-ai-tika-document-reader'
+
+    // Elasticsearch for full-text BM25 search (hybrid retrieval)
+    implementation 'co.elastic.clients:elasticsearch-java:8.15.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // Scheduling for retention cleanup
+    implementation 'org.springframework.boot:spring-boot-starter'
+}

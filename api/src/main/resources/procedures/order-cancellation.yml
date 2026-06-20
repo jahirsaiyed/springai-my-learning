@@ -1,0 +1,37 @@
+name: Cancel Order
+description: Order cancellation workflow with eligibility checks
+steps:
+  - name: verify_order
+    action: lookup_order
+    description: Look up the order and verify ownership
+    parameters:
+      required: order_id
+  - name: check_cancellation_eligibility
+    action: check_cancellation_policy
+    description: Verify order can be cancelled (not shipped, within cancellation window)
+    parameters:
+      check: order_status,shipment_status,cancellation_window
+    on_failure: explain_ineligibility
+  - name: confirm_cancellation
+    action: ask_user_confirmation
+    description: Confirm the customer wants to cancel the order
+    requires_confirmation: "true"
+    parameters:
+      display: order_summary,refund_amount,cancellation_consequences
+  - name: process_cancellation
+    action: cancel_order
+    description: Cancel the order in the order management system
+    parameters:
+      required: order_id,cancellation_reason
+    on_success: initiate_refund
+    on_failure: escalate_to_human
+  - name: initiate_refund
+    action: process_refund
+    description: Automatically initiate refund for cancelled order
+    parameters:
+      refund_type: full
+  - name: notify_customer
+    action: send_notification
+    description: Send cancellation confirmation
+    parameters:
+      template: order_cancelled

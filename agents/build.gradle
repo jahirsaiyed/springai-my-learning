@@ -1,0 +1,10 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':core')
+    implementation project(':memory')
+
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+}

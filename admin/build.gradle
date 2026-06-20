@@ -1,0 +1,11 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':core')
+    implementation project(':memory')
+    implementation project(':agents')
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}

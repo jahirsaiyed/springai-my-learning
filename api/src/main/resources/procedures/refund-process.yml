@@ -1,0 +1,31 @@
+name: Process Refund
+description: Standard refund processing workflow for e-commerce orders
+steps:
+  - name: verify_order
+    action: lookup_order
+    description: Look up the order and verify it exists and belongs to the customer
+    parameters:
+      required: order_id
+  - name: check_eligibility
+    action: check_refund_policy
+    description: Verify the order is within the refund window and meets eligibility criteria
+    parameters:
+      policy_check: return_window,item_condition,refund_type
+  - name: confirm_with_customer
+    action: ask_user_confirmation
+    description: Confirm the refund details with the customer before processing
+    requires_confirmation: "true"
+    parameters:
+      display: refund_amount,refund_method,estimated_timeline
+  - name: initiate_refund
+    action: process_refund
+    description: Submit the refund to the payment gateway
+    parameters:
+      required: order_id,refund_amount,refund_reason
+    on_success: notify_customer
+    on_failure: escalate_to_human
+  - name: notify_customer
+    action: send_notification
+    description: Notify the customer that the refund has been initiated
+    parameters:
+      template: refund_initiated

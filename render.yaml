@@ -1,0 +1,68 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: support-agent-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SERVER_PORT
+        value: "8080"
+      - key: DB_HOST
+        fromDatabase:
+          name: support-agent-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: support-agent-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: support-agent-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: support-agent-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: support-agent-db
+          property: password
+      - key: REDIS_HOST
+        fromService:
+          name: support-agent-redis
+          type: redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          name: support-agent-redis
+          type: redis
+          property: port
+      - key: ES_HOST
+        sync: false
+      - key: ES_PORT
+        value: "9200"
+      - key: COMPASS_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  - type: redis
+    name: support-agent-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+
+databases:
+  - name: support-agent-db
+    plan: starter
+    postgresMajorVersion: "16"
+    ipAllowList: []

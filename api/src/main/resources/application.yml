@@ -1,0 +1,60 @@
+spring:
+  ai:
+    openai:
+      api-key: ${COMPASS_API_KEY:}
+      base-url: https://api.core42.ai
+      chat:
+        options:
+          model: gpt-4.1
+          temperature: 0.7
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:support_agent}
+    username: ${DB_USERNAME:support_agent}
+    password: ${DB_PASSWORD:support_agent_dev}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: public
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    schemas: public
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:this-is-a-dev-secret-change-in-production-min-32-chars}
+    expiration-ms: ${JWT_EXPIRATION:86400000}
+  github:
+    client-id: ${GITHUB_CLIENT_ID:}
+    client-secret: ${GITHUB_CLIENT_SECRET:}
+  cache:
+    l2-similarity-threshold: ${CACHE_L2_THRESHOLD:0.95}
+    rag-similarity-threshold: ${CACHE_RAG_THRESHOLD:0.98}
+    ttl:
+      policy-faq-hours: ${CACHE_TTL_POLICY:24}
+      order-status-minutes: ${CACHE_TTL_ORDER:5}
+      refund-status-minutes: ${CACHE_TTL_REFUND:10}
+      procedural-hours: ${CACHE_TTL_PROCEDURAL:1}
+      general-minutes: ${CACHE_TTL_GENERAL:30}
+  elasticsearch:
+    host: ${ES_HOST:localhost}
+    port: ${ES_PORT:9200}
+  memory:
+    retention:
+      episodic-default-days: ${RETENTION_EPISODIC_DAYS:365}
+      cache-cleanup-interval-minutes: ${RETENTION_CACHE_CLEANUP:60}
+
+server:
+  port: ${SERVER_PORT:8080}

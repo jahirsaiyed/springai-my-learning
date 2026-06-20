@@ -1,0 +1,10 @@
+chat-ui/
+admin-ui/
+.gradle/
+build/
+*/build/
+.git/
+.claude/
+*.md
+docker-compose.yml
+infra/

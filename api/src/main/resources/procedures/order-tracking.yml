@@ -1,0 +1,18 @@
+name: Track Order
+description: Order tracking and status inquiry workflow
+steps:
+  - name: identify_order
+    action: lookup_order
+    description: Find the order by order ID or recent orders for the customer
+    parameters:
+      lookup_by: order_id,customer_id
+  - name: get_shipment_status
+    action: track_shipment
+    description: Retrieve current shipment tracking information
+    parameters:
+      required: tracking_number
+  - name: present_status
+    action: format_response
+    description: Present order status and tracking details to the customer
+    parameters:
+      include: order_status,shipment_status,estimated_delivery,tracking_link

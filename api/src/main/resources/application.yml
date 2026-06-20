@@ -59,6 +59,6 @@ app:
     retention:
       episodic-default-days: ${RETENTION_EPISODIC_DAYS:365}
       cache-cleanup-interval-minutes: ${RETENTION_CACHE_CLEANUP:60}
-
+  allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
 server:
   port: ${SERVER_PORT:8080}

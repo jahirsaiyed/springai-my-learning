@@ -2,9 +2,7 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "@support-agent-api-url"
-  },
+  "env": {},
   "rewrites": [
     {
       "source": "/api/:path*",

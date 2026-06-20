@@ -9,7 +9,7 @@ COPY admin/build.gradle admin/build.gradle
 COPY api/build.gradle api/build.gradle
 
 # Download dependencies first (cached layer)
-RUN ./gradlew dependencies --no-daemon || true
+RUN chmod +x gradlew && ./gradlew dependencies --no-daemon || true
 
 COPY core/src core/src
 COPY memory/src memory/src

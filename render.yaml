@@ -60,6 +60,7 @@ services:
     name: support-agent-redis
     plan: starter
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
 
 databases:
   - name: support-agent-db

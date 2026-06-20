@@ -1,4 +1,10 @@
 spring:
+  datasource:
+    url: ${DATABASE_URL:}
+  data:
+    redis:
+      url: ${REDIS_URL:}
+
   jpa:
     hibernate:
       ddl-auto: validate

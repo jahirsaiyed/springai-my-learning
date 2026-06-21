@@ -22,35 +22,43 @@ public class OlistOrderDataProvider implements OrderDataProvider {
 
     @Override
     public OrderDetails getOrder(String orderId) {
-        var order = orderService.getOrder(orderId);
-        String items = order.getItems().stream()
-                .map(i -> i.getProduct().getCategoryNameEn() + " ($" + i.getPrice() + ")")
-                .collect(Collectors.joining(", "));
-        String paymentInfo = order.getPayments().stream()
-                .map(p -> p.getPaymentType() + " $" + p.getPaymentValue())
-                .collect(Collectors.joining(", "));
-        return new OrderDetails(
-                order.getOrderId(), order.getStatus(), items,
-                "$" + order.getTotal().toPlainString(),
-                order.getCustomer().getCustomerId(),
-                order.getPurchaseTimestamp() != null ? order.getPurchaseTimestamp().toString() : "N/A",
-                order.getDeliveredCustomerDate() != null ? order.getDeliveredCustomerDate().toString() : "Not yet delivered",
-                order.getEstimatedDeliveryDate() != null ? order.getEstimatedDeliveryDate().toString() : "N/A",
-                paymentInfo);
+        try {
+            var order = orderService.getOrder(orderId);
+            String items = order.getItems().stream()
+                    .map(i -> i.getProduct().getCategoryNameEn() + " ($" + i.getPrice() + ")")
+                    .collect(Collectors.joining(", "));
+            String paymentInfo = order.getPayments().stream()
+                    .map(p -> p.getPaymentType() + " $" + p.getPaymentValue())
+                    .collect(Collectors.joining(", "));
+            return new OrderDetails(
+                    order.getOrderId(), order.getStatus(), items,
+                    "$" + order.getTotal().toPlainString(),
+                    order.getCustomer().getCustomerId(),
+                    order.getPurchaseTimestamp() != null ? order.getPurchaseTimestamp().toString() : "N/A",
+                    order.getDeliveredCustomerDate() != null ? order.getDeliveredCustomerDate().toString() : "Not yet delivered",
+                    order.getEstimatedDeliveryDate() != null ? order.getEstimatedDeliveryDate().toString() : "N/A",
+                    paymentInfo);
+        } catch (OrderNotFoundException e) {
+            return null;
+        }
     }
 
     @Override
     public ShipmentDetails trackShipment(String orderId) {
-        var order = orderService.getOrder(orderId);
-        String freightInfo = order.getItems().stream()
-                .map(i -> "freight: $" + i.getFreightValue())
-                .collect(Collectors.joining(", "));
-        return new ShipmentDetails(
-                order.getOrderId(), order.getStatus(),
-                order.getEstimatedDeliveryDate() != null ? order.getEstimatedDeliveryDate().toString() : "N/A",
-                order.getDeliveredCustomerDate() != null ? order.getDeliveredCustomerDate().toString() : "Not yet delivered",
-                order.getDeliveredCarrierDate() != null ? order.getDeliveredCarrierDate().toString() : "Not yet handed to carrier",
-                freightInfo);
+        try {
+            var order = orderService.getOrder(orderId);
+            String freightInfo = order.getItems().stream()
+                    .map(i -> "freight: $" + i.getFreightValue())
+                    .collect(Collectors.joining(", "));
+            return new ShipmentDetails(
+                    order.getOrderId(), order.getStatus(),
+                    order.getEstimatedDeliveryDate() != null ? order.getEstimatedDeliveryDate().toString() : "N/A",
+                    order.getDeliveredCustomerDate() != null ? order.getDeliveredCustomerDate().toString() : "Not yet delivered",
+                    order.getDeliveredCarrierDate() != null ? order.getDeliveredCarrierDate().toString() : "Not yet handed to carrier",
+                    freightInfo);
+        } catch (OrderNotFoundException e) {
+            return null;
+        }
     }
 
     @Override
@@ -71,8 +79,9 @@ public class OlistOrderDataProvider implements OrderDataProvider {
     public List<OrderSummary> getRecentOrders(String customerId) {
         return orderService.listCustomerOrders(customerId, 10).stream()
                 .map(o -> new OrderSummary(o.getOrderId(),
-                        "$" + o.getTotal().toPlainString(),
-                        o.getStatus(), ""))
+                        "",
+                        o.getStatus(),
+                        o.getPurchaseTimestamp() != null ? o.getPurchaseTimestamp().toString() : "N/A"))
                 .toList();
     }
 }

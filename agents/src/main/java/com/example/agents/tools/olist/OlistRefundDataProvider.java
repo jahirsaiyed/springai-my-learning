@@ -21,10 +21,15 @@ public class OlistRefundDataProvider implements RefundDataProvider {
 
     @Override
     public RefundPolicyResult checkRefundPolicy(String orderId) {
-        var result = refundService.checkEligibility(orderId);
-        return new RefundPolicyResult(orderId, result.orderStatus(), "",
-                result.eligible(), "$" + result.eligibleAmount().toPlainString(),
-                result.reason(), "30 days return policy");
+        try {
+            var result = refundService.checkEligibility(orderId);
+            return new RefundPolicyResult(orderId, result.orderStatus(), "",
+                    result.eligible(), "$" + result.eligibleAmount().toPlainString(),
+                    result.reason(), "30 days return policy");
+        } catch (OrderNotFoundException e) {
+            return new RefundPolicyResult(orderId, "NOT_FOUND", "", false, "$0",
+                    e.getMessage(), "");
+        }
     }
 
     @Override

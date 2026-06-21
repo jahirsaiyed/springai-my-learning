@@ -4,10 +4,12 @@ import com.example.ecommerce.service.EcommerceRefundService;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
 @Component
+@Transactional(readOnly = true)
 public class McpRefundTools {
 
     private final EcommerceRefundService refundService;
@@ -32,6 +34,7 @@ public class McpRefundTools {
     }
 
     @Tool(description = "Initiate a refund for a delivered order.")
+    @Transactional
     public String initiateRefund(
             @ToolParam(description = "The order ID") String orderId,
             @ToolParam(description = "Refund amount") String amount,

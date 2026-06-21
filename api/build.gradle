@@ -6,6 +6,7 @@ dependencies {
     implementation project(':core')
     implementation project(':memory')
     implementation project(':agents')
+    implementation project(':ecommerce')
     implementation project(':admin')
 
     implementation 'org.springframework.boot:spring-boot-starter-web'

@@ -1,5 +1,6 @@
 package com.example.agents;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -10,8 +11,15 @@ public record AgentContext(
     UUID customerId,
     UUID conversationId,
     String memoryContext,
+    List<ChatMessage> conversationHistory,
     int turnCount
 ) {
+
+    /**
+     * A lightweight representation of a conversation message for prompt building.
+     */
+    public record ChatMessage(String role, String content) {}
+
 
     public static final int MAX_TURNS_BEFORE_ESCALATION = 15;
 

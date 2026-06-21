@@ -1,6 +1,8 @@
 package com.example.memory.semantic;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -23,6 +25,7 @@ public class KnowledgeChunk {
     private int chunkIndex;
 
     @Column(name = "metadata_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String metadataJson;
 
     @Column(name = "created_at", nullable = false, updatable = false)

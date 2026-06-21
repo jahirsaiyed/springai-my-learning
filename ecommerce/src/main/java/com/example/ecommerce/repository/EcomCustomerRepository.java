@@ -4,6 +4,7 @@ import com.example.ecommerce.entity.EcomCustomer;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -13,5 +14,5 @@ public interface EcomCustomerRepository extends JpaRepository<EcomCustomer, Stri
             String city, String state, Pageable pageable);
 
     @Query("SELECT COUNT(o) FROM EcomOrder o WHERE o.customer.customerId = :customerId")
-    long countOrdersByCustomerId(String customerId);
+    long countOrdersByCustomerId(@Param("customerId") String customerId);
 }

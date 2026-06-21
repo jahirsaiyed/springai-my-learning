@@ -4,6 +4,7 @@ import com.example.agents.AgentResponse;
 import com.example.agents.orchestrator.OrchestratorAgent;
 import com.example.core.tenant.TenantContext;
 import com.example.api.security.AuthenticatedUser;
+import com.example.ecommerce.service.CustomerResolver;
 import com.example.memory.episodic.Channel;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -18,9 +19,11 @@ import java.util.UUID;
 public class ChatController {
 
     private final OrchestratorAgent orchestrator;
+    private final CustomerResolver customerResolver;
 
-    public ChatController(OrchestratorAgent orchestrator) {
+    public ChatController(OrchestratorAgent orchestrator, CustomerResolver customerResolver) {
         this.orchestrator = orchestrator;
+        this.customerResolver = customerResolver;
     }
 
     @PostMapping("/start")
@@ -33,8 +36,9 @@ public class ChatController {
             ? Channel.valueOf(request.channel().toUpperCase())
             : Channel.WEB;
 
+        String ecomCustomerId = customerResolver.resolve(user.id()).orElse(null);
         AgentResponse response = orchestrator.startConversation(
-            tenant.getId(), user.id(), channel, request.message());
+            tenant.getId(), user.id(), channel, request.message(), ecomCustomerId);
 
         return ResponseEntity.ok(ChatResponse.from(response));
     }
@@ -47,8 +51,9 @@ public class ChatController {
 
         var tenant = TenantContext.require();
 
+        String ecomCustomerId = customerResolver.resolve(user.id()).orElse(null);
         AgentResponse response = orchestrator.continueConversation(
-            tenant.getId(), user.id(), conversationId, request.message());
+            tenant.getId(), user.id(), conversationId, request.message(), ecomCustomerId);
 
         return ResponseEntity.ok(ChatResponse.from(response));
     }
@@ -77,13 +82,18 @@ public class ChatController {
     public record ResolveRequest(String resolution) {}
 
     public record ChatResponse(
+        String conversationId,
         String message,
         String handledBy,
         boolean requiresConfirmation,
         boolean escalated
     ) {
         public static ChatResponse from(AgentResponse response) {
+            String convId = response.metadata() != null
+                ? (String) response.metadata().get("conversationId")
+                : null;
             return new ChatResponse(
+                convId,
                 response.message(),
                 response.handledBy().name(),
                 response.requiresConfirmation(),

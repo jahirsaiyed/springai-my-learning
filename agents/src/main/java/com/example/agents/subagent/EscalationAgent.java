@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
-@Component
+// @Component — disabled: replaced by LangGraph4j SupportGraph
 public class EscalationAgent implements SubAgent {
 
     private final ChatClient chatClient;
@@ -64,9 +64,20 @@ public class EscalationAgent implements SubAgent {
         if (!context.memoryContext().isBlank()) {
             prompt.append("Conversation context:\n").append(context.memoryContext()).append("\n\n");
         }
+        appendConversationHistory(prompt, context);
         prompt.append("Customer message: ").append(userMessage).append("\n");
         prompt.append("Turn count: ").append(context.turnCount()).append("\n");
         prompt.append("\nPlease create a ticket or transfer to a human agent as appropriate.");
         return prompt.toString();
+    }
+
+    private void appendConversationHistory(StringBuilder prompt, AgentContext context) {
+        if (context.conversationHistory() != null && !context.conversationHistory().isEmpty()) {
+            prompt.append("## Conversation History\n");
+            for (var msg : context.conversationHistory()) {
+                prompt.append(msg.role()).append(": ").append(msg.content()).append("\n");
+            }
+            prompt.append("\n");
+        }
     }
 }

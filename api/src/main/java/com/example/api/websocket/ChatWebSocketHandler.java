@@ -8,6 +8,7 @@ import com.example.api.security.AuthenticatedUser;
 import com.example.core.tenant.Tenant;
 import com.example.core.tenant.TenantContext;
 import com.example.core.tenant.TenantRepository;
+import com.example.ecommerce.service.CustomerResolver;
 import com.example.memory.episodic.Channel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,15 +42,18 @@ public class ChatWebSocketHandler {
     private final StreamingOrchestratorAgent streamingOrchestrator;
     private final SimpMessagingTemplate messagingTemplate;
     private final TenantRepository tenantRepository;
+    private final CustomerResolver customerResolver;
 
     public ChatWebSocketHandler(OrchestratorAgent orchestrator,
                                  StreamingOrchestratorAgent streamingOrchestrator,
                                  SimpMessagingTemplate messagingTemplate,
-                                 TenantRepository tenantRepository) {
+                                 TenantRepository tenantRepository,
+                                 CustomerResolver customerResolver) {
         this.orchestrator = orchestrator;
         this.streamingOrchestrator = streamingOrchestrator;
         this.messagingTemplate = messagingTemplate;
         this.tenantRepository = tenantRepository;
+        this.customerResolver = customerResolver;
     }
 
     @MessageMapping("/chat.start")
@@ -68,8 +72,9 @@ public class ChatWebSocketHandler {
             Channel channel = Channel.WEBSOCKET;
 
             // Stream response token by token
+            String ecomCustomerId = customerResolver.resolve(user.id()).orElse(null);
             streamingOrchestrator.startConversationStream(
-                tenant.getId(), user.id(), channel, request.message()
+                tenant.getId(), user.id(), channel, request.message(), ecomCustomerId
             ).subscribe(
                 event -> sendToUser(principal, "/queue/chat.stream", event),
                 error -> {
@@ -99,8 +104,9 @@ public class ChatWebSocketHandler {
         try {
             TenantContext.set(tenant);
 
+            String ecomCustomerId = customerResolver.resolve(user.id()).orElse(null);
             streamingOrchestrator.continueConversationStream(
-                tenant.getId(), user.id(), conversationId, request.message()
+                tenant.getId(), user.id(), conversationId, request.message(), ecomCustomerId
             ).subscribe(
                 event -> sendToUser(principal, "/queue/chat.stream", event),
                 error -> {

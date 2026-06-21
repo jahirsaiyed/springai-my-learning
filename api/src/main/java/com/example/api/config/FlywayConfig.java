@@ -23,7 +23,8 @@ public class FlywayConfig {
             TenantSchemaMigrator tenantSchemaMigrator,
             DataSource dataSource) {
         return flyway -> {
-            // 1. Run public schema migrations first
+            // 1. Repair any failed migrations, then run public schema migrations
+            flyway.repair();
             flyway.migrate();
 
             // 2. Query tenant schemas via JDBC to avoid JPA circular dependency

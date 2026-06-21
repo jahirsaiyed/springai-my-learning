@@ -7,7 +7,7 @@ import com.example.agents.tools.KnowledgeTools;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
-@Component
+// @Component — disabled: replaced by LangGraph4j SupportGraph
 public class KnowledgeAgent implements SubAgent {
 
     private final ChatClient chatClient;
@@ -57,7 +57,18 @@ public class KnowledgeAgent implements SubAgent {
         if (!context.memoryContext().isBlank()) {
             prompt.append("Context from memory:\n").append(context.memoryContext()).append("\n\n");
         }
+        appendConversationHistory(prompt, context);
         prompt.append("Customer question: ").append(userMessage);
         return prompt.toString();
+    }
+
+    private void appendConversationHistory(StringBuilder prompt, AgentContext context) {
+        if (context.conversationHistory() != null && !context.conversationHistory().isEmpty()) {
+            prompt.append("## Conversation History\n");
+            for (var msg : context.conversationHistory()) {
+                prompt.append(msg.role()).append(": ").append(msg.content()).append("\n");
+            }
+            prompt.append("\n");
+        }
     }
 }

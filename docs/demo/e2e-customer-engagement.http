@@ -1,0 +1,235 @@
+###############################################################################
+# E2E Customer Engagement Demo
+#
+# This script walks through a complete customer support journey:
+#   1. Sign up a new user
+#   2. Admin links the user to an Olist ecommerce customer
+#   3. Chat: ask about recent orders         (ORDER agent)
+#   4. Chat: track a specific order           (ORDER agent)
+#   5. Chat: request a refund                 (REFUND agent)
+#   6. Chat: ask about return policy          (KNOWLEDGE agent)
+#   7. Chat: escalate to a human              (ESCALATION agent)
+#   8. Resolve the conversation
+#
+# Prerequisites:
+#   - App running: ./gradlew :api:bootRun
+#   - Data seeded: ./gradlew :api:bootRun --args='--spring.profiles.active=seed'
+#   - At least one Olist customer exists in ecommerce.customers
+#
+# Usage (VS Code):
+#   Install "REST Client" extension (humao.rest-client)
+#   Click "Send Request" above each request block
+#   Copy response values into variables as noted in comments
+#
+# Usage (IntelliJ):
+#   Open this file -> click green play buttons
+#   Use > {% ... %} response handler blocks to capture variables
+#
+###############################################################################
+
+@baseUrl = http://localhost:8080
+@tenantSlug = default
+
+###############################################################################
+# STEP 1: Sign up a new user
+#
+# Creates a new account and returns a JWT token.
+# Save the "token" value from the response — you'll use it for all
+# subsequent requests.
+###############################################################################
+
+POST {{baseUrl}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "demo-user@example.com",
+  "name": "Demo User",
+  "password": "demo1234secure"
+}
+
+### -> Copy the token from the response into @authToken below:
+@authToken = <paste-token-here>
+
+###############################################################################
+# STEP 1b (alternative): Sign in if user already exists
+###############################################################################
+
+# POST {{baseUrl}}/api/auth/signin
+# Content-Type: application/json
+#
+# {
+#   "email": "demo-user@example.com",
+#   "password": "demo1234secure"
+# }
+
+###############################################################################
+# STEP 2: Admin — link user to an Olist ecommerce customer
+#
+# First, find your user's UUID. You can get it from the JWT payload
+# (decode at jwt.io) or query the database:
+#   SELECT id FROM public.users WHERE email = 'demo-user@example.com';
+#
+# Then pick an Olist customer who has orders (for a richer demo):
+#   SELECT c.customer_id
+#   FROM ecommerce.customers c
+#   JOIN ecommerce.orders o ON o.customer_id = c.customer_id
+#   GROUP BY c.customer_id
+#   HAVING COUNT(*) >= 2
+#   LIMIT 5;
+#
+# If seeding ran with an existing user, the mapping may already exist.
+# Check: SELECT * FROM ecommerce.user_customer_mappings;
+###############################################################################
+
+@userId = <paste-user-uuid-here>
+@olistCustomerId = <paste-olist-customer-id-here>
+
+POST {{baseUrl}}/api/admin/user-customer-mappings
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+X-Tenant-Slug: {{tenantSlug}}
+
+{
+  "userId": "{{userId}}",
+  "customerId": "{{olistCustomerId}}"
+}
+
+###############################################################################
+# STEP 3: Chat — "What are my recent orders?" (ORDER agent)
+#
+# Starts a new conversation. The orchestrator resolves the user's UUID
+# to the linked Olist customer ID, then the ORDER agent calls
+# getRecentOrders() with the real customer ID.
+#
+# The response JSON includes a "conversationId" field — copy it for
+# follow-up messages.
+###############################################################################
+
+POST {{baseUrl}}/api/chat/start
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+X-Tenant-Slug: {{tenantSlug}}
+
+{
+  "message": "Hi! Can you show me my recent orders?",
+  "channel": "WEB"
+}
+
+### -> The response JSON contains "conversationId" and a message listing
+###    real Olist orders. Copy both values below:
+@conversationId = <paste-conversationId-from-response-json>
+@orderId = <paste-an-order-id-from-the-message>
+
+###############################################################################
+# STEP 4: Chat — "Track my order" (ORDER agent)
+#
+# Continues the same conversation. The ORDER agent calls trackShipment()
+# to return delivery status, carrier info, and estimated delivery date.
+###############################################################################
+
+POST {{baseUrl}}/api/chat/{{conversationId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+X-Tenant-Slug: {{tenantSlug}}
+
+{
+  "message": "Can you track order {{orderId}} for me? Where is it right now?"
+}
+
+###############################################################################
+# STEP 5: Chat — "I want a refund" (REFUND agent)
+#
+# The router detects refund intent and hands off to the REFUND agent.
+# It calls checkRefundPolicy() to verify eligibility, then initiateRefund()
+# if the order qualifies.
+###############################################################################
+
+POST {{baseUrl}}/api/chat/{{conversationId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+X-Tenant-Slug: {{tenantSlug}}
+
+{
+  "message": "I'm not happy with that order. I'd like to request a refund for order {{orderId}}."
+}
+
+###############################################################################
+# STEP 6: Chat — "What is your return policy?" (KNOWLEDGE agent)
+#
+# The router detects a knowledge/FAQ intent. The KNOWLEDGE agent searches
+# the semantic knowledge base for return policy information.
+###############################################################################
+
+POST {{baseUrl}}/api/chat/{{conversationId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+X-Tenant-Slug: {{tenantSlug}}
+
+{
+  "message": "By the way, what is your general return policy? How many days do I have?"
+}
+
+###############################################################################
+# STEP 7: Chat — "I want to talk to someone" (ESCALATION agent)
+#
+# The router detects escalation intent. The ESCALATION agent creates a
+# support ticket and offers to transfer to a human agent.
+###############################################################################
+
+POST {{baseUrl}}/api/chat/{{conversationId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+X-Tenant-Slug: {{tenantSlug}}
+
+{
+  "message": "This is getting complicated. I'd like to speak with a real person please."
+}
+
+###############################################################################
+# STEP 8: Resolve the conversation
+#
+# Closes the conversation. The system proposes a shared insight from the
+# interaction for the admin to review later.
+###############################################################################
+
+POST {{baseUrl}}/api/chat/{{conversationId}}/resolve
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+X-Tenant-Slug: {{tenantSlug}}
+
+{
+  "resolution": "Customer requested refund and was escalated to human support."
+}
+
+###############################################################################
+# BONUS: Verify the mapping (admin endpoint)
+#
+# List all user-customer mappings to confirm the link is in place.
+###############################################################################
+
+GET {{baseUrl}}/api/admin/user-customer-mappings
+Authorization: Bearer {{authToken}}
+X-Tenant-Slug: {{tenantSlug}}
+
+###############################################################################
+# BONUS: Unlinked user scenario
+#
+# To test the "no mapping" path, delete the mapping and start a new
+# conversation asking about orders. The agent should respond that the
+# account is not linked.
+###############################################################################
+
+# DELETE {{baseUrl}}/api/admin/user-customer-mappings/<mapping-id>
+# Authorization: Bearer {{authToken}}
+# X-Tenant-Slug: {{tenantSlug}}
+
+# POST {{baseUrl}}/api/chat/start
+# Content-Type: application/json
+# Authorization: Bearer {{authToken}}
+# X-Tenant-Slug: {{tenantSlug}}
+#
+# {
+#   "message": "Show me my orders",
+#   "channel": "WEB"
+# }
+# -> Expected: Agent tells user their account is not linked

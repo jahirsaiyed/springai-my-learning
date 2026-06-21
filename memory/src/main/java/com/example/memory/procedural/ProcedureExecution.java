@@ -1,6 +1,8 @@
 package com.example.memory.procedural;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -20,6 +22,7 @@ public class ProcedureExecution {
     private UUID conversationId;
 
     @Column(name = "state_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String stateJson;
 
     @Column(nullable = false)

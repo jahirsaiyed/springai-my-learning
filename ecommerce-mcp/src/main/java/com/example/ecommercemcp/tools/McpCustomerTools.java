@@ -4,8 +4,10 @@ import com.example.ecommerce.service.EcommerceCustomerService;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@Transactional(readOnly = true)
 public class McpCustomerTools {
 
     private final EcommerceCustomerService customerService;

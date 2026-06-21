@@ -4,6 +4,7 @@ import com.example.ecommerce.entity.EcomOrder;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -15,7 +16,7 @@ public interface EcomOrderRepository extends JpaRepository<EcomOrder, String> {
         WHERE o.customer.customerId = :customerId
         ORDER BY o.purchaseTimestamp DESC
         """)
-    List<EcomOrder> findByCustomerIdOrderByPurchaseDesc(String customerId, Pageable pageable);
+    List<EcomOrder> findByCustomerIdOrderByPurchaseDesc(@Param("customerId") String customerId, Pageable pageable);
 
     @Query("""
         SELECT o FROM EcomOrder o
@@ -25,5 +26,5 @@ public interface EcomOrderRepository extends JpaRepository<EcomOrder, String> {
         LEFT JOIN FETCH o.payments
         WHERE o.orderId = :orderId
         """)
-    java.util.Optional<EcomOrder> findByIdWithDetails(String orderId);
+    java.util.Optional<EcomOrder> findByIdWithDetails(@Param("orderId") String orderId);
 }

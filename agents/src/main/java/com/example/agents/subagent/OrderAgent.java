@@ -7,7 +7,10 @@ import com.example.agents.tools.OrderTools;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
 
-@Component
+/**
+ * @deprecated Replaced by SupportGraph order_agent node. Kept for reference.
+ */
+// @Component — disabled: replaced by LangGraph4j SupportGraph
 public class OrderAgent implements SubAgent {
 
     private final ChatClient chatClient;
@@ -60,8 +63,19 @@ public class OrderAgent implements SubAgent {
         if (!context.memoryContext().isBlank()) {
             prompt.append("Context from memory:\n").append(context.memoryContext()).append("\n\n");
         }
+        appendConversationHistory(prompt, context);
         prompt.append("Customer ID: ").append(context.customerId()).append("\n");
         prompt.append("Customer message: ").append(userMessage);
         return prompt.toString();
+    }
+
+    private void appendConversationHistory(StringBuilder prompt, AgentContext context) {
+        if (context.conversationHistory() != null && !context.conversationHistory().isEmpty()) {
+            prompt.append("## Conversation History\n");
+            for (var msg : context.conversationHistory()) {
+                prompt.append(msg.role()).append(": ").append(msg.content()).append("\n");
+            }
+            prompt.append("\n");
+        }
     }
 }

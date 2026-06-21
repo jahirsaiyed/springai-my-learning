@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.util.*;
+import java.util.UUID;
 
 @Component
 @Profile("seed")
@@ -47,63 +48,88 @@ public class OlistDataSeeder implements ApplicationRunner {
         seedOrderPayments();
         seedOrderReviews();
         synthesizeRefunds();
+        seedUserCustomerMappings();
 
         long elapsed = (System.currentTimeMillis() - start) / 1000;
         log.info("Olist data seeding completed in {}s", elapsed);
     }
 
     private boolean isAlreadySeeded() {
-        var count = jdbc.queryForObject("SELECT COUNT(*) FROM ecommerce.orders", Long.class);
+        var count = jdbc.queryForObject("SELECT COUNT(*) FROM ecommerce.user_customer_mappings", Long.class);
         return count != null && count > 0;
     }
 
     private void seedCategories() {
         log.info("Seeding product categories...");
         var rows = readCsv("seed/product_category_name_translation.csv");
+        var validRows = rows.stream()
+                .filter(row -> row.get("product_category_name") != null)
+                .toList();
         jdbc.batchUpdate(
                 "INSERT INTO ecommerce.product_categories (category_name_pt, category_name_en) VALUES (?, ?) ON CONFLICT DO NOTHING",
-                rows, BATCH_SIZE,
+                validRows, BATCH_SIZE,
                 (ps, row) -> {
                     ps.setString(1, row.get("product_category_name"));
                     ps.setString(2, row.get("product_category_name_english"));
                 });
-        log.info("Seeded {} categories", rows.size());
+        log.info("Seeded {} categories (skipped {} with null PT name)", validRows.size(), rows.size() - validRows.size());
     }
 
     private void seedCustomers() {
         log.info("Seeding customers...");
-        var rows = readCsv("seed/olist_customers_dataset.csv");
+        var rows = filterRequired(readCsv("seed/olist_customers_dataset.csv"),
+                "customers", "customer_id", "customer_unique_id");
         jdbc.batchUpdate(
                 "INSERT INTO ecommerce.customers (customer_id, customer_unique_id, zip_code_prefix, city, state) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                 rows, BATCH_SIZE,
                 (ps, row) -> {
                     ps.setString(1, row.get("customer_id"));
                     ps.setString(2, row.get("customer_unique_id"));
-                    ps.setString(3, row.get("customer_zip_code_prefix"));
-                    ps.setString(4, row.get("customer_city"));
-                    ps.setString(5, row.get("customer_state"));
+                    setStringOrNull(ps, 3, row.get("customer_zip_code_prefix"));
+                    setStringOrNull(ps, 4, row.get("customer_city"));
+                    setStringOrNull(ps, 5, row.get("customer_state"));
                 });
         log.info("Seeded {} customers", rows.size());
     }
 
     private void seedSellers() {
         log.info("Seeding sellers...");
-        var rows = readCsv("seed/olist_sellers_dataset.csv");
+        var rows = filterRequired(readCsv("seed/olist_sellers_dataset.csv"),
+                "sellers", "seller_id");
         jdbc.batchUpdate(
                 "INSERT INTO ecommerce.sellers (seller_id, zip_code_prefix, city, state) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING",
                 rows, BATCH_SIZE,
                 (ps, row) -> {
                     ps.setString(1, row.get("seller_id"));
-                    ps.setString(2, row.get("seller_zip_code_prefix"));
-                    ps.setString(3, row.get("seller_city"));
-                    ps.setString(4, row.get("seller_state"));
+                    setStringOrNull(ps, 2, row.get("seller_zip_code_prefix"));
+                    setStringOrNull(ps, 3, row.get("seller_city"));
+                    setStringOrNull(ps, 4, row.get("seller_state"));
                 });
         log.info("Seeded {} sellers", rows.size());
     }
 
     private void seedProducts() {
         log.info("Seeding products...");
-        var rows = readCsv("seed/olist_products_dataset.csv");
+        var rows = filterRequired(readCsv("seed/olist_products_dataset.csv"),
+                "products", "product_id");
+
+        // Auto-insert any category names referenced by products but missing from the translation table
+        var missingCategories = rows.stream()
+                .map(row -> row.get("product_category_name"))
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (!missingCategories.isEmpty()) {
+            jdbc.batchUpdate(
+                    "INSERT INTO ecommerce.product_categories (category_name_pt, category_name_en) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                    missingCategories, BATCH_SIZE,
+                    (ps, cat) -> {
+                        ps.setString(1, cat);
+                        ps.setString(2, cat.replace('_', ' '));
+                    });
+            log.info("Ensured {} product categories exist", missingCategories.size());
+        }
+
         jdbc.batchUpdate(
                 "INSERT INTO ecommerce.products (product_id, category_name_pt, name_length, description_length, photos_qty, weight_g, length_cm, height_cm, width_cm) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
                 rows, BATCH_SIZE,
@@ -123,7 +149,8 @@ public class OlistDataSeeder implements ApplicationRunner {
 
     private void seedOrders() {
         log.info("Seeding orders...");
-        var rows = readCsv("seed/olist_orders_dataset.csv");
+        var rows = filterRequired(readCsv("seed/olist_orders_dataset.csv"),
+                "orders", "order_id", "customer_id", "order_status");
         jdbc.batchUpdate(
                 "INSERT INTO ecommerce.orders (order_id, customer_id, status, purchase_timestamp, approved_at, delivered_carrier_date, delivered_customer_date, estimated_delivery_date) VALUES (?, ?, ?, ?::timestamp, ?::timestamp, ?::timestamp, ?::timestamp, ?::timestamp) ON CONFLICT DO NOTHING",
                 rows, BATCH_SIZE,
@@ -142,7 +169,9 @@ public class OlistDataSeeder implements ApplicationRunner {
 
     private void seedOrderItems() {
         log.info("Seeding order items...");
-        var rows = readCsv("seed/olist_order_items_dataset.csv");
+        var rows = filterRequired(readCsv("seed/olist_order_items_dataset.csv"),
+                "order_items", "order_id", "order_item_id", "product_id", "seller_id", "price", "freight_value")
+                .stream().filter(row -> isInt(row.get("order_item_id"))).toList();
         jdbc.batchUpdate(
                 "INSERT INTO ecommerce.order_items (order_id, order_item_id, product_id, seller_id, shipping_limit_date, price, freight_value) VALUES (?, ?, ?, ?, ?::timestamp, ?::numeric, ?::numeric) ON CONFLICT DO NOTHING",
                 rows, BATCH_SIZE,
@@ -160,7 +189,9 @@ public class OlistDataSeeder implements ApplicationRunner {
 
     private void seedOrderPayments() {
         log.info("Seeding order payments...");
-        var rows = readCsv("seed/olist_order_payments_dataset.csv");
+        var rows = filterRequired(readCsv("seed/olist_order_payments_dataset.csv"),
+                "order_payments", "order_id", "payment_sequential", "payment_type", "payment_installments", "payment_value")
+                .stream().filter(row -> isInt(row.get("payment_sequential")) && isInt(row.get("payment_installments"))).toList();
         jdbc.batchUpdate(
                 "INSERT INTO ecommerce.order_payments (order_id, payment_sequential, payment_type, payment_installments, payment_value) VALUES (?, ?, ?, ?, ?::numeric) ON CONFLICT DO NOTHING",
                 rows, BATCH_SIZE,
@@ -176,7 +207,9 @@ public class OlistDataSeeder implements ApplicationRunner {
 
     private void seedOrderReviews() {
         log.info("Seeding order reviews...");
-        var rows = readCsv("seed/olist_order_reviews_dataset.csv");
+        var rows = filterRequired(readCsv("seed/olist_order_reviews_dataset.csv"),
+                "order_reviews", "review_id", "order_id", "review_score")
+                .stream().filter(row -> isInt(row.get("review_score"))).toList();
         jdbc.batchUpdate(
                 "INSERT INTO ecommerce.order_reviews (review_id, order_id, review_score, review_comment_title, review_comment_message, review_creation_date, review_answer_timestamp) VALUES (?, ?, ?, ?, ?, ?::timestamp, ?::timestamp) ON CONFLICT DO NOTHING",
                 rows, BATCH_SIZE,
@@ -229,6 +262,53 @@ public class OlistDataSeeder implements ApplicationRunner {
         log.info("Synthesized {} refunds from low-review orders", lowReviewRefunds);
     }
 
+    private void seedUserCustomerMappings() {
+        log.info("Seeding user-customer mappings...");
+
+        var users = jdbc.queryForList("SELECT id FROM public.users");
+        if (users.isEmpty()) {
+            log.info("No users found in public.users — skipping mapping seed");
+            return;
+        }
+
+        var availableCustomers = jdbc.queryForList(
+                "SELECT customer_id FROM ecommerce.customers " +
+                "WHERE customer_id NOT IN (SELECT customer_id FROM ecommerce.user_customer_mappings) " +
+                "ORDER BY RANDOM() LIMIT ?",
+                String.class, users.size());
+
+        int mapped = 0;
+        for (int i = 0; i < users.size() && i < availableCustomers.size(); i++) {
+            UUID userId = (UUID) users.get(i).get("id");
+            String customerId = availableCustomers.get(i);
+            try {
+                jdbc.update(
+                        "INSERT INTO ecommerce.user_customer_mappings (user_id, customer_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                        userId, customerId);
+                mapped++;
+            } catch (Exception e) {
+                log.warn("Failed to map user {} -> customer {}: {}", userId, customerId, e.getMessage());
+            }
+        }
+        log.info("Seeded {} user-customer mappings", mapped);
+    }
+
+    private List<Map<String, String>> filterRequired(List<Map<String, String>> rows, String tableName, String... requiredKeys) {
+        var valid = rows.stream()
+                .filter(row -> {
+                    for (String key : requiredKeys) {
+                        if (row.get(key) == null) return false;
+                    }
+                    return true;
+                })
+                .toList();
+        int skipped = rows.size() - valid.size();
+        if (skipped > 0) {
+            log.warn("Skipped {} {} rows with missing required fields", skipped, tableName);
+        }
+        return valid;
+    }
+
     private List<Map<String, String>> readCsv(String resourcePath) {
         var result = new ArrayList<Map<String, String>>();
         try (var reader = new BufferedReader(new InputStreamReader(
@@ -237,10 +317,30 @@ public class OlistDataSeeder implements ApplicationRunner {
             String headerLine = reader.readLine();
             if (headerLine == null) return result;
 
-            String[] headers = headerLine.split(",");
+            // Strip UTF-8 BOM (U+FEFF) if present
+            if (headerLine.charAt(0) == '\uFEFF') {
+                headerLine = headerLine.substring(1);
+            }
+
+            String[] headers = parseCsvLine(headerLine);
 
             String line;
+            StringBuilder pending = null;
             while ((line = reader.readLine()) != null) {
+                // Handle multi-line quoted fields: accumulate lines until quotes are balanced
+                if (pending != null) {
+                    pending.append('\n').append(line);
+                    if (isQuoteBalanced(pending.toString())) {
+                        line = pending.toString();
+                        pending = null;
+                    } else {
+                        continue;
+                    }
+                } else if (!isQuoteBalanced(line)) {
+                    pending = new StringBuilder(line);
+                    continue;
+                }
+
                 String[] values = parseCsvLine(line);
                 var row = new HashMap<String, String>();
                 for (int i = 0; i < headers.length && i < values.length; i++) {
@@ -262,17 +362,48 @@ public class OlistDataSeeder implements ApplicationRunner {
 
         for (int i = 0; i < line.length(); i++) {
             char c = line.charAt(i);
-            if (c == '"') {
-                inQuotes = !inQuotes;
-            } else if (c == ',' && !inQuotes) {
-                fields.add(current.toString());
-                current = new StringBuilder();
+            if (inQuotes) {
+                if (c == '"') {
+                    if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                        current.append('"');
+                        i++; // skip escaped quote
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    current.append(c);
+                }
             } else {
-                current.append(c);
+                if (c == '"') {
+                    inQuotes = true;
+                } else if (c == ',') {
+                    fields.add(current.toString());
+                    current = new StringBuilder();
+                } else {
+                    current.append(c);
+                }
             }
         }
         fields.add(current.toString());
         return fields.toArray(new String[0]);
+    }
+
+    private boolean isInt(String value) {
+        if (value == null) return false;
+        try {
+            Integer.parseInt(value.trim());
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    private boolean isQuoteBalanced(String line) {
+        long count = 0;
+        for (int i = 0; i < line.length(); i++) {
+            if (line.charAt(i) == '"') count++;
+        }
+        return count % 2 == 0;
     }
 
     private void setStringOrNull(PreparedStatement ps, int index, String value) throws java.sql.SQLException {

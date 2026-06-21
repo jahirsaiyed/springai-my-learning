@@ -6,10 +6,12 @@ import com.example.ecommerce.service.EcommerceOrderService;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.stream.Collectors;
 
 @Component
+@Transactional(readOnly = true)
 public class McpOrderTools {
 
     private final EcommerceOrderService orderService;
@@ -77,6 +79,7 @@ public class McpOrderTools {
     }
 
     @Tool(description = "Cancel an order. Only pending/processing orders can be cancelled.")
+    @Transactional
     public String cancelOrder(
             @ToolParam(description = "The order ID to cancel") String orderId,
             @ToolParam(description = "Reason for cancellation") String reason) {

@@ -4,6 +4,7 @@ import com.example.agents.orchestrator.StreamingOrchestratorAgent;
 import com.example.agents.orchestrator.StreamingOrchestratorAgent.StreamEvent;
 import com.example.api.security.AuthenticatedUser;
 import com.example.core.tenant.TenantContext;
+import com.example.ecommerce.service.CustomerResolver;
 import com.example.memory.episodic.Channel;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -27,9 +28,11 @@ import java.util.UUID;
 public class ChatStreamController {
 
     private final StreamingOrchestratorAgent streamingOrchestrator;
+    private final CustomerResolver customerResolver;
 
-    public ChatStreamController(StreamingOrchestratorAgent streamingOrchestrator) {
+    public ChatStreamController(StreamingOrchestratorAgent streamingOrchestrator, CustomerResolver customerResolver) {
         this.streamingOrchestrator = streamingOrchestrator;
+        this.customerResolver = customerResolver;
     }
 
     @PostMapping(value = "/start", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -42,8 +45,9 @@ public class ChatStreamController {
             ? Channel.valueOf(request.channel().toUpperCase())
             : Channel.WEB;
 
+        String ecomCustomerId = customerResolver.resolve(user.id()).orElse(null);
         return streamingOrchestrator.startConversationStream(
-            tenant.getId(), user.id(), channel, request.message()
+            tenant.getId(), user.id(), channel, request.message(), ecomCustomerId
         ).onErrorResume(e -> Flux.just(StreamEvent.error(e.getMessage())));
     }
 
@@ -55,8 +59,9 @@ public class ChatStreamController {
 
         var tenant = TenantContext.require();
 
+        String ecomCustomerId = customerResolver.resolve(user.id()).orElse(null);
         return streamingOrchestrator.continueConversationStream(
-            tenant.getId(), user.id(), conversationId, request.message()
+            tenant.getId(), user.id(), conversationId, request.message(), ecomCustomerId
         ).onErrorResume(e -> Flux.just(StreamEvent.error(e.getMessage())));
     }
 

@@ -1,6 +1,8 @@
 package com.example.core.tenant;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -22,6 +24,7 @@ public class Tenant {
     private String schemaName;
 
     @Column(name = "config_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String configJson;
 
     @Column(nullable = false)

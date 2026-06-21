@@ -1,6 +1,8 @@
 spring:
   datasource:
-    url: ${DATABASE_URL:}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:support_agent}?prepareThreshold=0
+    username: ${DB_USERNAME:support_agent}
+    password: ${DB_PASSWORD:support_agent_dev}
   data:
     redis:
       url: ${REDIS_URL:}

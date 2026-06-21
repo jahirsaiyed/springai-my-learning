@@ -5,6 +5,9 @@ plugins {
 dependencies {
     api project(':core')
     implementation project(':memory')
+    implementation project(':ecommerce')
 
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+    implementation 'org.bsc.langgraph4j:langgraph4j-spring-ai:1.8.19'
 }

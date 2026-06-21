@@ -1,0 +1,13 @@
+plugins {
+    id 'org.springframework.boot'
+}
+
+springBoot {
+    mainClass = 'com.example.ecommercemcp.EcommerceMcpApplication'
+}
+
+dependencies {
+    implementation project(':ecommerce')
+
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webflux'
+}

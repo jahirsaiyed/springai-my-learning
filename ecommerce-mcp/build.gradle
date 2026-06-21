@@ -10,4 +10,5 @@ dependencies {
     implementation project(':ecommerce')
 
     implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
 }

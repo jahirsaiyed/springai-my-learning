@@ -56,6 +56,37 @@ services:
       - key: ALLOWED_ORIGINS
         sync: false
 
+  - type: web
+    name: ecommerce-mcp-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile.ecommerce-mcp
+    plan: free
+    envVars:
+      - key: MCP_SERVER_PORT
+        value: "8081"
+      - key: DB_HOST
+        fromDatabase:
+          name: support-agent-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: support-agent-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: support-agent-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: support-agent-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: support-agent-db
+          property: password
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+
   - type: redis
     name: support-agent-redis
     plan: starter

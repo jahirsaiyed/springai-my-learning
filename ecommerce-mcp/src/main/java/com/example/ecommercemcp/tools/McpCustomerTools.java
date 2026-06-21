@@ -26,7 +26,7 @@ public class McpCustomerTools {
                     + "- Zip: " + c.getZipCodePrefix() + "\n"
                     + "- Total Orders: " + orderCount;
         } catch (Exception e) {
-            return "CUSTOMER_NOT_FOUND: " + e.getMessage();
+            return "CUSTOMER_NOT_FOUND: No customer found with ID '" + customerId + "'.";
         }
     }
 

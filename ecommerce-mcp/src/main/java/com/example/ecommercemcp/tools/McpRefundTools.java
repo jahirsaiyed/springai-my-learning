@@ -27,7 +27,7 @@ public class McpRefundTools {
                     + "- Amount: $" + result.eligibleAmount().toPlainString() + "\n"
                     + "- " + result.reason();
         } catch (Exception e) {
-            return "ORDER_NOT_FOUND: " + e.getMessage();
+            return "ORDER_NOT_FOUND: No order found with ID '" + orderId + "'.";
         }
     }
 
@@ -36,8 +36,14 @@ public class McpRefundTools {
             @ToolParam(description = "The order ID") String orderId,
             @ToolParam(description = "Refund amount") String amount,
             @ToolParam(description = "Reason for refund") String reason) {
+        BigDecimal parsedAmount;
         try {
-            var refund = refundService.initiateRefund(orderId, new BigDecimal(amount), reason);
+            parsedAmount = new BigDecimal(amount.strip());
+        } catch (NumberFormatException e) {
+            return "REFUND_FAILED: Invalid amount format '" + amount + "'. Provide a numeric value such as '49.99'.";
+        }
+        try {
+            var refund = refundService.initiateRefund(orderId, parsedAmount, reason);
             return "Refund Initiated:\n"
                     + "- Refund ID: " + refund.getRefundId() + "\n"
                     + "- Order: " + orderId + "\n"
@@ -45,7 +51,7 @@ public class McpRefundTools {
                     + "- Status: " + refund.getStatus() + "\n"
                     + "- Expected: 5-7 business days";
         } catch (Exception e) {
-            return "REFUND_FAILED: " + e.getMessage();
+            return "REFUND_FAILED: Unable to process refund for order " + orderId + ".";
         }
     }
 

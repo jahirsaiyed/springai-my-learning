@@ -4,6 +4,9 @@ spring:
       server:
         name: ecommerce-mcp
         version: 1.0.0
+        type: SYNC
+    mcp-server:
+      stdio: false
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:postgres}?prepareThreshold=0

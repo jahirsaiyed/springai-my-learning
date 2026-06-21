@@ -47,7 +47,7 @@ public class McpProductTools {
                     + "- Avg Rating: " + (rating != null ? String.format("%.1f", rating) : "N/A") + "\n"
                     + "- Review Count: " + (reviewCount != null ? reviewCount : 0);
         } catch (Exception e) {
-            return "PRODUCT_NOT_FOUND: No product exists with ID '" + productId + "'.";
+            return "PRODUCT_NOT_FOUND: No product found with ID '" + productId + "'.";
         }
     }
 

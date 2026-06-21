@@ -162,7 +162,7 @@ public class OlistDataSeeder implements ApplicationRunner {
         log.info("Seeding order payments...");
         var rows = readCsv("seed/olist_order_payments_dataset.csv");
         jdbc.batchUpdate(
-                "INSERT INTO ecommerce.order_payments (order_id, payment_sequential, payment_type, payment_installments, payment_value) VALUES (?, ?, ?, ?, ?::numeric)",
+                "INSERT INTO ecommerce.order_payments (order_id, payment_sequential, payment_type, payment_installments, payment_value) VALUES (?, ?, ?, ?, ?::numeric) ON CONFLICT DO NOTHING",
                 rows, BATCH_SIZE,
                 (ps, row) -> {
                     ps.setString(1, row.get("order_id"));
@@ -194,8 +194,6 @@ public class OlistDataSeeder implements ApplicationRunner {
 
     private void synthesizeRefunds() {
         log.info("Synthesizing refunds...");
-        var random = new Random(42);
-
         // Canceled orders -> COMPLETED refunds
         int canceledRefunds = jdbc.update("""
             INSERT INTO ecommerce.refunds (refund_id, order_id, amount, status, reason, created_at)
@@ -252,7 +250,7 @@ public class OlistDataSeeder implements ApplicationRunner {
                 result.add(row);
             }
         } catch (Exception e) {
-            log.error("Failed to read CSV: {}", resourcePath, e);
+            throw new IllegalStateException("Failed to read seed CSV: " + resourcePath, e);
         }
         return result;
     }

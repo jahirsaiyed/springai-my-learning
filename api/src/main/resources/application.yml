@@ -1,17 +1,25 @@
 spring:
   ai:
     openai:
-      api-key: ${COMPASS_API_KEY:}
+      api-key: ${COMPASS_API_KEY:ec23d88e543a47219e6194615aaf22d3}
       base-url: https://api.core42.ai
       chat:
         options:
           model: gpt-4.1
           temperature: 0.7
+      embedding:
+        options:
+          model: ${EMBEDDING_MODEL:text-embedding-3-large}
+          dimensions: 1536
+    vectorstore:
+      pgvector:
+        initialize-schema: false
+        dimensions: 1536
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:support_agent}
-    username: ${DB_USERNAME:support_agent}
-    password: ${DB_PASSWORD:support_agent_dev}
+    url: jdbc:postgresql://${DB_HOST:aws-1-ap-southeast-1.pooler.supabase.com}:${DB_PORT:6543}/${DB_NAME:postgres}?prepareThreshold=0
+    username: ${DB_USERNAME:postgres.jubfkjoaymuuxnowiyvs}
+    password: ${DB_PASSWORD:sgJB0BYqc1fHeMl4}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -29,20 +37,20 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST:redis-16483.crce264.ap-east-1-1.ec2.cloud.redislabs.com}
+      port: ${REDIS_PORT:16483}
       username: ${REDIS_USERNAME:default}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:GHPJeFWJAjVnxRJYmY3DrySxaUJxr6AB}
       ssl:
         enabled: ${REDIS_SSL:false}
 
 app:
   jwt:
-    secret: ${JWT_SECRET:this-is-a-dev-secret-change-in-production-min-32-chars}
+    secret: ${JWT_SECRET:4db786992c62aa33adff23d17c3544f61e92c4949ee1ad596d09aaa4da8d286b}
     expiration-ms: ${JWT_EXPIRATION:86400000}
   github:
-    client-id: ${GITHUB_CLIENT_ID:}
-    client-secret: ${GITHUB_CLIENT_SECRET:}
+    client-id: ${GITHUB_CLIENT_ID:Ov23liWmHMr8Dh3PlrV3}
+    client-secret: ${GITHUB_CLIENT_SECRET:f3785ecc8ae0dfda2d455245e1a32ea21191afb2}
   cache:
     l2-similarity-threshold: ${CACHE_L2_THRESHOLD:0.95}
     rag-similarity-threshold: ${CACHE_RAG_THRESHOLD:0.98}
@@ -55,6 +63,8 @@ app:
   elasticsearch:
     host: ${ES_HOST:localhost}
     port: ${ES_PORT:9200}
+  ecommerce:
+    provider: ${ECOMMERCE_PROVIDER:olist}
   memory:
     retention:
       episodic-default-days: ${RETENTION_EPISODIC_DAYS:365}

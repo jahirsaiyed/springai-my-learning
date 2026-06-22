@@ -114,4 +114,63 @@ class IntentClassifierTest {
         assertThat(result.targetAgent()).isEqualTo(AgentType.KNOWLEDGE);
         verify(chatModel).call(any(Prompt.class));
     }
+
+    @Test
+    @DisplayName("'return my order' routes to REFUND, not ORDER")
+    void classify_returnMyOrder_routesToRefund() {
+        IntentClassification result = classifier.classify("I want to return my order");
+
+        assertThat(result.targetAgent()).isEqualTo(AgentType.REFUND);
+        assertThat(result.isHighConfidence()).isTrue();
+    }
+
+    @Test
+    @DisplayName("short ambiguous message uses previous intent (sticky routing)")
+    void classify_shortMessage_usesPreviousIntent() {
+        IntentClassification result = classifier.classify("yes", List.of(), "REFUND");
+
+        assertThat(result.targetAgent()).isEqualTo(AgentType.REFUND);
+        assertThat(result.isHighConfidence()).isTrue();
+        assertThat(result.reasoning()).contains("Sticky intent");
+    }
+
+    @Test
+    @DisplayName("short message 'all' sticks with previous REFUND intent")
+    void classify_allMessage_sticksWithRefund() {
+        IntentClassification result = classifier.classify("all", List.of(), "REFUND");
+
+        assertThat(result.targetAgent()).isEqualTo(AgentType.REFUND);
+    }
+
+    @Test
+    @DisplayName("short message without previous intent falls through to LLM")
+    void classify_shortMessageNoPreviousIntent_fallsToLlm() {
+        var generation = new Generation(new AssistantMessage("KNOWLEDGE"));
+        var chatResponse = new ChatResponse(List.of(generation));
+        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse);
+
+        IntentClassification result = classifier.classify("yes", List.of(), null);
+
+        assertThat(result.targetAgent()).isEqualTo(AgentType.KNOWLEDGE);
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    @Test
+    @DisplayName("'damaged' keyword routes to REFUND directly")
+    void classify_damaged_routesToRefund() {
+        IntentClassification result = classifier.classify("The items arrived damaged");
+
+        assertThat(result.targetAgent()).isEqualTo(AgentType.REFUND);
+        assertThat(result.isHighConfidence()).isTrue();
+    }
+
+    @Test
+    @DisplayName("explicit intent change overrides sticky routing")
+    void classify_explicitIntentChange_overridesSticky() {
+        // "track my order" has a strong ORDER keyword match — should override previous REFUND
+        IntentClassification result = classifier.classify("track my order", List.of(), "REFUND");
+
+        assertThat(result.targetAgent()).isEqualTo(AgentType.ORDER);
+        assertThat(result.isHighConfidence()).isTrue();
+    }
 }

@@ -40,10 +40,15 @@ public class IntentClassifier {
     }
 
     public IntentClassification classify(String userMessage) {
-        return classify(userMessage, List.of());
+        return classify(userMessage, List.of(), null);
     }
 
     public IntentClassification classify(String userMessage, List<Message> conversationHistory) {
+        return classify(userMessage, conversationHistory, null);
+    }
+
+    public IntentClassification classify(String userMessage, List<Message> conversationHistory,
+                                          String previousIntent) {
         if (conversationHistory == null) {
             conversationHistory = List.of();
         }
@@ -52,6 +57,13 @@ public class IntentClassifier {
         IntentClassification keywordResult = keywordClassify(userMessage);
         if (keywordResult.isHighConfidence()) {
             return keywordResult;
+        }
+
+        // For short/ambiguous messages, stick with previous intent if available
+        if (previousIntent != null && isAmbiguousMessage(userMessage)) {
+            AgentType prevType = parseAgentType(previousIntent);
+            return new IntentClassification(prevType, 0.8,
+                "Sticky intent from previous turn: " + previousIntent);
         }
 
         // Fall back to LLM classification with conversation context for ambiguous messages
@@ -71,10 +83,24 @@ public class IntentClassifier {
             AgentType agentType = parseAgentType(result);
             return new IntentClassification(agentType, 0.85, "LLM classification: " + result);
         } catch (Exception e) {
-            // Default to knowledge agent on classification failure
+            // If LLM fails and we have a previous intent, use it
+            if (previousIntent != null) {
+                AgentType prevType = parseAgentType(previousIntent);
+                return new IntentClassification(prevType, 0.6,
+                    "Classification failed, using previous intent: " + previousIntent);
+            }
             return new IntentClassification(AgentType.KNOWLEDGE, 0.5,
                 "Classification failed, defaulting to knowledge");
         }
+    }
+
+    private boolean isAmbiguousMessage(String message) {
+        String trimmed = message.trim();
+        // Short confirmations/answers that don't carry intent signal
+        if (trimmed.split("\\s+").length <= 3) {
+            return true;
+        }
+        return false;
     }
 
     private String buildClassificationPrompt(String userMessage, List<Message> history) {
@@ -98,16 +124,17 @@ public class IntentClassifier {
     private IntentClassification keywordClassify(String message) {
         String lower = message.toLowerCase();
 
+        // REFUND checked BEFORE ORDER — "return my order" should route to REFUND, not ORDER
+        if (containsAny(lower, "refund", "return", "money back", "reimburse",
+                "credit back", "overcharged", "damaged")) {
+            return new IntentClassification(AgentType.REFUND, 0.9, "Keyword: refund/return");
+        }
         if (containsAny(lower, "track", "where is my order", "shipping status",
-                "delivery", "when will", "order status", "my order")) {
+                "delivery", "when will", "order status")) {
             return new IntentClassification(AgentType.ORDER, 0.9, "Keyword: order/tracking");
         }
         if (containsAny(lower, "cancel my order", "cancel order", "cancellation")) {
             return new IntentClassification(AgentType.ORDER, 0.9, "Keyword: cancellation");
-        }
-        if (containsAny(lower, "refund", "return", "money back", "reimburse",
-                "credit back", "overcharged")) {
-            return new IntentClassification(AgentType.REFUND, 0.9, "Keyword: refund/return");
         }
         if (containsAny(lower, "speak to human", "talk to agent", "real person",
                 "manager", "supervisor", "complaint", "frustrated", "unacceptable")) {

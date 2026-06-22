@@ -25,6 +25,7 @@ public class SupportGraphState extends MessagesState<Message> {
     public static final String HANDLED_BY = "handledBy";
     public static final String ECOM_CUSTOMER_ID = "ecomCustomerId";
     public static final String MCP_FAILURE_COUNT = "mcpFailureCount";
+    public static final String PREVIOUS_INTENT = "previousIntent";
 
     public static final Map<String, Channel<?>> SCHEMA;
 
@@ -84,5 +85,9 @@ public class SupportGraphState extends MessagesState<Message> {
 
     public int mcpFailureCount() {
         return this.<Integer>value(MCP_FAILURE_COUNT).orElse(0);
+    }
+
+    public String previousIntent() {
+        return this.<String>value(PREVIOUS_INTENT).orElse(null);
     }
 }

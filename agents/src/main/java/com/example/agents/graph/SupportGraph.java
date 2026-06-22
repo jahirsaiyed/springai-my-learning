@@ -354,6 +354,12 @@ public class SupportGraph {
         var lastMsg = getLastUserMessageText(state);
         UUID tenantId = state.tenantId();
 
+        // Skip cache for short/ambiguous messages — they produce false semantic matches
+        if (lastMsg.trim().split("\\s+").length <= 3) {
+            log.debug("Skipping cache for short message: '{}'", lastMsg);
+            return Map.of();
+        }
+
         Optional<CachedResponse> cached = cacheService.lookup(tenantId, lastMsg);
         if (cached.isPresent()) {
             log.info("Cache hit (layer: {}) for conversation {}",
@@ -381,9 +387,15 @@ public class SupportGraph {
 
     private Map<String, Object> routerNode(SupportGraphState state) {
         var lastMsg = getLastUserMessageText(state);
-        var intent = intentClassifier.classify(lastMsg, state.messages());
-        log.info("Intent classified: {} (confidence: {})", intent.targetAgent(), intent.confidence());
-        return Map.of(SupportGraphState.INTENT, intent.targetAgent().name());
+        String previousIntent = state.previousIntent();
+        var intent = intentClassifier.classify(lastMsg, state.messages(), previousIntent);
+        String intentName = intent.targetAgent().name();
+        log.info("Intent classified: {} (confidence: {}, previous: {}, reason: {})",
+            intentName, intent.confidence(), previousIntent, intent.reasoning());
+        return Map.of(
+            SupportGraphState.INTENT, intentName,
+            SupportGraphState.PREVIOUS_INTENT, intentName
+        );
     }
 
     private String afterRouter(SupportGraphState state) {

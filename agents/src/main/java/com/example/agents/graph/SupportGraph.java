@@ -69,6 +69,9 @@ public class SupportGraph {
     private final ToolCallback[] orderMcpTools;
     private final ToolCallback[] refundMcpTools;
 
+    private final String orderSystemPrompt;
+    private final String refundSystemPrompt;
+
     private final CompiledGraph<SupportGraphState> compiledGraph;
     private final MemorySaver memorySaver;
 
@@ -91,15 +94,21 @@ public class SupportGraph {
         this.orderMcpTools = mcpToolRouter.getOrderAgentTools();
         this.refundMcpTools = mcpToolRouter.getRefundAgentTools();
 
-        // Build dedicated ChatClients for each agent domain with their tools.
-        // Uses ChatClient.builder(chatModel) directly to avoid auto-registered
-        // MCP tools from ChatClient.Builder — enables selective tool routing.
-        this.orderClient = ChatClient.builder(chatModel)
-            .defaultSystem("""
+        // Store system prompts so callAgent() can rebuild the full prompt with context appended.
+        // prompt.system() REPLACES defaultSystem — it does NOT append.
+        this.orderSystemPrompt = """
                 You are an Order Support Agent for an e-commerce platform.
                 Help with order lookups, tracking, shipment status, delivery questions, and order cancellations.
                 Be precise with order details. Always confirm before destructive actions.
                 Use the conversation history to maintain context across turns.
+
+                TOOL USAGE:
+                - When the user asks about "my latest order", "my orders", or "my recent orders" without
+                  providing an order ID, use the listCustomerOrders tool with their customer ID to retrieve
+                  their orders. Then show the most recent one or the full list as appropriate.
+                - Use trackShipment to get delivery dates and shipping info for a specific order.
+                - Use getOrder to get full details for a specific order ID.
+                - Always call a tool to look up data. NEVER ask the user for information you can look up yourself.
 
                 CRITICAL RULES:
                 - NEVER fabricate or invent order details. Only report information returned by your tools.
@@ -109,22 +118,35 @@ public class SupportGraph {
                 - Do NOT guess or make up shipping carriers, tracking numbers, delivery dates, or order contents.
                 - If a tool returns MCP_UNAVAILABLE, inform the user that the order system is temporarily
                   unavailable and suggest they try again shortly or contact support for urgent issues.
-                """)
-            .defaultTools(askUserQuestionTool)
-            .defaultToolCallbacks(orderMcpTools)
-            .build();
+                """;
 
-        this.refundClient = ChatClient.builder(chatModel)
-            .defaultSystem("""
+        this.refundSystemPrompt = """
                 You are a Refund Support Agent for an e-commerce platform.
                 Help with refund eligibility, processing refund requests, checking refund status, and explaining return policies.
                 Always check eligibility first. Confirm amounts before processing. Never process without explicit confirmation.
                 Use the conversation history to maintain context across turns.
 
+                TOOL USAGE:
+                - Use checkRefundEligibility to verify if an order qualifies for a refund before processing.
+                - Use getRefundStatus to check the current status of a refund request.
+                - Always call a tool to look up data. NEVER ask the user for information you can look up yourself.
+
                 CRITICAL RULES:
                 - If a tool returns MCP_UNAVAILABLE, inform the user that the refund system is temporarily
                   unavailable and suggest they try again shortly or contact support for urgent issues.
-                """)
+                """;
+
+        // Build dedicated ChatClients for each agent domain with their tools.
+        // Uses ChatClient.builder(chatModel) directly to avoid auto-registered
+        // MCP tools from ChatClient.Builder — enables selective tool routing.
+        this.orderClient = ChatClient.builder(chatModel)
+            .defaultSystem(orderSystemPrompt)
+            .defaultTools(askUserQuestionTool)
+            .defaultToolCallbacks(orderMcpTools)
+            .build();
+
+        this.refundClient = ChatClient.builder(chatModel)
+            .defaultSystem(refundSystemPrompt)
             .defaultTools(askUserQuestionTool)
             .defaultToolCallbacks(refundMcpTools)
             .build();
@@ -400,15 +422,21 @@ public class SupportGraph {
             prompt.messages(messages);
         }
 
-        // Inject ecommerce customer context via system prompt addition
+        // Inject ecommerce customer context by rebuilding the full system prompt.
+        // prompt.system() REPLACES defaultSystem — so we must include the original prompt.
         String ecomCustId = state.ecomCustomerId();
-        if (ecomCustId != null) {
-            prompt.system("The current user's ecommerce customer ID is: " + ecomCustId
-                + ". Use this ID when calling order, customer, or refund tools.");
-        } else if ("ORDER".equals(agentName) || "REFUND".equals(agentName)) {
-            prompt.system("This user has no linked ecommerce account. "
-                + "If they ask about orders or refunds, inform them that their account is not linked "
-                + "and suggest they contact an admin to link their account.");
+        if ("ORDER".equals(agentName) || "REFUND".equals(agentName)) {
+            String basePrompt = "ORDER".equals(agentName) ? orderSystemPrompt : refundSystemPrompt;
+            if (ecomCustId != null) {
+                prompt.system(basePrompt
+                    + "\nThe current user's ecommerce customer ID is: " + ecomCustId
+                    + ". Use this ID when calling order, customer, or refund tools.");
+            } else {
+                prompt.system(basePrompt
+                    + "\nThis user has no linked ecommerce account. "
+                    + "If they ask about orders or refunds, inform them that their account is not linked "
+                    + "and suggest they contact an admin to link their account.");
+            }
         }
 
         String response = prompt.call().content();

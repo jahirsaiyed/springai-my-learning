@@ -20,7 +20,8 @@ public class McpToolRouter {
     private static final Logger log = LoggerFactory.getLogger(McpToolRouter.class);
 
     private static final Set<String> ORDER_AGENT_TOOLS = Set.of(
-            "getOrder", "listCustomerOrders", "getCustomer", "searchCustomers"
+            "getOrder", "listCustomerOrders", "getCustomer", "searchCustomers",
+            "trackShipment", "cancelOrder"
     );
 
     private static final Set<String> REFUND_AGENT_TOOLS = Set.of(

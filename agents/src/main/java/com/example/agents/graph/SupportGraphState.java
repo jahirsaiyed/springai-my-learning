@@ -24,6 +24,7 @@ public class SupportGraphState extends MessagesState<Message> {
     public static final String RESPONSE_TEXT = "responseText";
     public static final String HANDLED_BY = "handledBy";
     public static final String ECOM_CUSTOMER_ID = "ecomCustomerId";
+    public static final String MCP_FAILURE_COUNT = "mcpFailureCount";
 
     public static final Map<String, Channel<?>> SCHEMA;
 
@@ -79,5 +80,9 @@ public class SupportGraphState extends MessagesState<Message> {
 
     public String handledBy() {
         return this.<String>value(HANDLED_BY).orElse("ORCHESTRATOR");
+    }
+
+    public int mcpFailureCount() {
+        return this.<Integer>value(MCP_FAILURE_COUNT).orElse(0);
     }
 }

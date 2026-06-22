@@ -3,13 +3,13 @@ package com.example.agents.graph;
 import com.example.agents.AgentContext;
 import com.example.agents.AgentType;
 import com.example.agents.guardrails.ConversationGuardrails;
-import com.example.agents.orchestrator.IntentClassifier;
+import com.example.agents.mcp.McpResilienceProperties;
 import com.example.agents.mcp.McpToolRouter;
+import com.example.agents.mcp.ResilientToolCallback;
+import com.example.agents.orchestrator.IntentClassifier;
 import com.example.agents.tools.AskUserQuestionTool;
 import com.example.agents.tools.EscalationTools;
 import com.example.agents.tools.KnowledgeTools;
-import com.example.agents.tools.OrderTools;
-import com.example.agents.tools.RefundTools;
 import com.example.memory.MemoryManager;
 import com.example.memory.cache.SemanticCacheService;
 import com.example.memory.cache.SemanticCacheService.CachedResponse;
@@ -26,6 +26,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -59,10 +60,14 @@ public class SupportGraph {
     private final MemoryManager memoryManager;
     private final SemanticCacheService cacheService;
     private final IntentClassifier intentClassifier;
+    private final McpResilienceProperties mcpProps;
     private final ChatClient orderClient;
     private final ChatClient refundClient;
     private final ChatClient knowledgeClient;
     private final ChatClient escalationClient;
+
+    private final ToolCallback[] orderMcpTools;
+    private final ToolCallback[] refundMcpTools;
 
     private final CompiledGraph<SupportGraphState> compiledGraph;
     private final MemorySaver memorySaver;
@@ -72,16 +77,19 @@ public class SupportGraph {
                         SemanticCacheService cacheService,
                         IntentClassifier intentClassifier,
                         ChatModel chatModel,
-                        OrderTools orderTools,
-                        RefundTools refundTools,
                         KnowledgeTools knowledgeTools,
                         EscalationTools escalationTools,
                         AskUserQuestionTool askUserQuestionTool,
-                        McpToolRouter mcpToolRouter) {
+                        McpToolRouter mcpToolRouter,
+                        McpResilienceProperties mcpProps) {
         this.guardrails = guardrails;
         this.memoryManager = memoryManager;
         this.cacheService = cacheService;
         this.intentClassifier = intentClassifier;
+        this.mcpProps = mcpProps;
+
+        this.orderMcpTools = mcpToolRouter.getOrderAgentTools();
+        this.refundMcpTools = mcpToolRouter.getRefundAgentTools();
 
         // Build dedicated ChatClients for each agent domain with their tools.
         // Uses ChatClient.builder(chatModel) directly to avoid auto-registered
@@ -99,9 +107,11 @@ public class SupportGraph {
                   Ask them to double-check their order ID (e.g., from their confirmation email) and try again.
                 - If a tool returns NO_SHIPMENT, explain that the order hasn't shipped yet and tracking is not available.
                 - Do NOT guess or make up shipping carriers, tracking numbers, delivery dates, or order contents.
+                - If a tool returns MCP_UNAVAILABLE, inform the user that the order system is temporarily
+                  unavailable and suggest they try again shortly or contact support for urgent issues.
                 """)
-            .defaultTools(orderTools, askUserQuestionTool)
-            .defaultToolCallbacks(mcpToolRouter.getOrderAgentTools())
+            .defaultTools(askUserQuestionTool)
+            .defaultToolCallbacks(orderMcpTools)
             .build();
 
         this.refundClient = ChatClient.builder(chatModel)
@@ -110,9 +120,13 @@ public class SupportGraph {
                 Help with refund eligibility, processing refund requests, checking refund status, and explaining return policies.
                 Always check eligibility first. Confirm amounts before processing. Never process without explicit confirmation.
                 Use the conversation history to maintain context across turns.
+
+                CRITICAL RULES:
+                - If a tool returns MCP_UNAVAILABLE, inform the user that the refund system is temporarily
+                  unavailable and suggest they try again shortly or contact support for urgent issues.
                 """)
-            .defaultTools(refundTools, askUserQuestionTool)
-            .defaultToolCallbacks(mcpToolRouter.getRefundAgentTools())
+            .defaultTools(askUserQuestionTool)
+            .defaultToolCallbacks(refundMcpTools)
             .build();
 
         this.knowledgeClient = ChatClient.builder(chatModel)
@@ -203,9 +217,23 @@ public class SupportGraph {
             )
         );
 
-        // All agents → post_process
-        stateGraph.addEdge(ORDER_AGENT, POST_PROCESS);
-        stateGraph.addEdge(REFUND_AGENT, POST_PROCESS);
+        // ORDER and REFUND agents → conditional: escalate on MCP failures, otherwise post_process
+        stateGraph.addConditionalEdges(ORDER_AGENT,
+            edge_async(this::afterMcpAgent),
+            Map.of(
+                "escalate", ESCALATION_AGENT,
+                "continue", POST_PROCESS
+            )
+        );
+        stateGraph.addConditionalEdges(REFUND_AGENT,
+            edge_async(this::afterMcpAgent),
+            Map.of(
+                "escalate", ESCALATION_AGENT,
+                "continue", POST_PROCESS
+            )
+        );
+
+        // KNOWLEDGE and ESCALATION agents keep direct edges to post_process
         stateGraph.addEdge(KNOWLEDGE_AGENT, POST_PROCESS);
         stateGraph.addEdge(ESCALATION_AGENT, POST_PROCESS);
 
@@ -331,13 +359,21 @@ public class SupportGraph {
 
     private Map<String, Object> routerNode(SupportGraphState state) {
         var lastMsg = getLastUserMessageText(state);
-        var intent = intentClassifier.classify(lastMsg);
+        var intent = intentClassifier.classify(lastMsg, state.messages());
         log.info("Intent classified: {} (confidence: {})", intent.targetAgent(), intent.confidence());
         return Map.of(SupportGraphState.INTENT, intent.targetAgent().name());
     }
 
     private String afterRouter(SupportGraphState state) {
         return state.intent();
+    }
+
+    private String afterMcpAgent(SupportGraphState state) {
+        int failures = state.mcpFailureCount();
+        if (failures >= mcpProps.getMaxFailuresBeforeEscalation()) {
+            return "escalate";
+        }
+        return "continue";
     }
 
     private Map<String, Object> orderAgentNode(SupportGraphState state) {
@@ -357,39 +393,57 @@ public class SupportGraph {
     }
 
     private Map<String, Object> callAgent(ChatClient client, SupportGraphState state, String agentName) {
-        // Build the message list: conversation history from graph state
         var messages = state.messages();
 
-        // Create a Prompt directly with the full message list so the ChatClient's
-        // defaultSystem prompt is included automatically
         var prompt = client.prompt();
         if (messages != null && !messages.isEmpty()) {
             prompt.messages(messages);
         }
 
-        // Inject ecommerce customer context as a user-level context message
-        // (NOT prompt.system() which overwrites the defaultSystem prompt)
+        // Inject ecommerce customer context via system prompt addition
         String ecomCustId = state.ecomCustomerId();
         if (ecomCustId != null) {
-            prompt.messages(new UserMessage(
-                    "[SYSTEM CONTEXT - DO NOT REPEAT TO USER] "
-                    + "The current user's ecommerce customer ID is: " + ecomCustId
-                    + ". Use this ID when calling getRecentOrders or other order/refund tools."));
+            prompt.system("The current user's ecommerce customer ID is: " + ecomCustId
+                + ". Use this ID when calling order, customer, or refund tools.");
         } else if ("ORDER".equals(agentName) || "REFUND".equals(agentName)) {
-            prompt.messages(new UserMessage(
-                    "[SYSTEM CONTEXT - DO NOT REPEAT TO USER] "
-                    + "This user has no linked ecommerce account. "
-                    + "If they ask about orders or refunds, inform them that their account is not linked "
-                    + "and suggest they contact an admin to link their account."));
+            prompt.system("This user has no linked ecommerce account. "
+                + "If they ask about orders or refunds, inform them that their account is not linked "
+                + "and suggest they contact an admin to link their account.");
         }
 
         String response = prompt.call().content();
+
+        int failures = countMcpFailures(agentName);
+        if (failures > 0) {
+            log.warn("Agent {} recorded {} MCP tool failure(s) this turn", agentName, failures);
+            return Map.of(
+                SupportGraphState.RESPONSE_TEXT, response,
+                SupportGraphState.HANDLED_BY, agentName,
+                SupportGraphState.MCP_FAILURE_COUNT, failures,
+                "messages", new AssistantMessage(response)
+            );
+        }
 
         return Map.of(
             SupportGraphState.RESPONSE_TEXT, response,
             SupportGraphState.HANDLED_BY, agentName,
             "messages", new AssistantMessage(response)
         );
+    }
+
+    private int countMcpFailures(String agentName) {
+        ToolCallback[] tools = switch (agentName) {
+            case "ORDER" -> orderMcpTools;
+            case "REFUND" -> refundMcpTools;
+            default -> new ToolCallback[0];
+        };
+        int total = 0;
+        for (ToolCallback cb : tools) {
+            if (cb instanceof ResilientToolCallback resilient) {
+                total += resilient.getConsecutiveFailures();
+            }
+        }
+        return total;
     }
 
     private Map<String, Object> postProcessNode(SupportGraphState state) {

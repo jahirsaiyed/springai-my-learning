@@ -122,11 +122,10 @@ class ResilientToolCallbackTest {
         // wait for reset timeout
         Thread.sleep(150);
 
-        // should attempt again (half-open probe)
+        // should attempt again (half-open probe) and return the recovered value
         String result = subject.call("{}");
 
-        // delegate should have been called again after reset
-        assertThat(result).isNotNull();
+        assertThat(result).isEqualTo("recovered");
         verify(delegate, atLeast(4)).call(anyString());
     }
 

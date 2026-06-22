@@ -2,6 +2,7 @@ package com.example.agents.orchestrator;
 
 import com.example.agents.AgentType;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,8 +14,8 @@ public class IntentClassifier {
 
     private final ChatClient classifierClient;
 
-    public IntentClassifier(ChatClient.Builder chatClientBuilder) {
-        this.classifierClient = chatClientBuilder
+    public IntentClassifier(ChatModel chatModel) {
+        this.classifierClient = ChatClient.builder(chatModel)
             .defaultSystem("""
                 You are an intent classifier for a customer support system.
                 Classify the customer's message into exactly ONE of these categories:

@@ -4,6 +4,7 @@ import com.example.agents.AgentContext;
 import com.example.agents.AgentType;
 import com.example.agents.guardrails.ConversationGuardrails;
 import com.example.agents.orchestrator.IntentClassifier;
+import com.example.agents.mcp.McpToolRouter;
 import com.example.agents.tools.AskUserQuestionTool;
 import com.example.agents.tools.EscalationTools;
 import com.example.agents.tools.KnowledgeTools;
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -69,19 +71,22 @@ public class SupportGraph {
                         MemoryManager memoryManager,
                         SemanticCacheService cacheService,
                         IntentClassifier intentClassifier,
-                        ChatClient.Builder chatClientBuilder,
+                        ChatModel chatModel,
                         OrderTools orderTools,
                         RefundTools refundTools,
                         KnowledgeTools knowledgeTools,
                         EscalationTools escalationTools,
-                        AskUserQuestionTool askUserQuestionTool) {
+                        AskUserQuestionTool askUserQuestionTool,
+                        McpToolRouter mcpToolRouter) {
         this.guardrails = guardrails;
         this.memoryManager = memoryManager;
         this.cacheService = cacheService;
         this.intentClassifier = intentClassifier;
 
-        // Build dedicated ChatClients for each agent domain with their tools
-        this.orderClient = chatClientBuilder.clone()
+        // Build dedicated ChatClients for each agent domain with their tools.
+        // Uses ChatClient.builder(chatModel) directly to avoid auto-registered
+        // MCP tools from ChatClient.Builder — enables selective tool routing.
+        this.orderClient = ChatClient.builder(chatModel)
             .defaultSystem("""
                 You are an Order Support Agent for an e-commerce platform.
                 Help with order lookups, tracking, shipment status, delivery questions, and order cancellations.
@@ -96,9 +101,10 @@ public class SupportGraph {
                 - Do NOT guess or make up shipping carriers, tracking numbers, delivery dates, or order contents.
                 """)
             .defaultTools(orderTools, askUserQuestionTool)
+            .defaultToolCallbacks(mcpToolRouter.getOrderAgentTools())
             .build();
 
-        this.refundClient = chatClientBuilder.clone()
+        this.refundClient = ChatClient.builder(chatModel)
             .defaultSystem("""
                 You are a Refund Support Agent for an e-commerce platform.
                 Help with refund eligibility, processing refund requests, checking refund status, and explaining return policies.
@@ -106,9 +112,10 @@ public class SupportGraph {
                 Use the conversation history to maintain context across turns.
                 """)
             .defaultTools(refundTools, askUserQuestionTool)
+            .defaultToolCallbacks(mcpToolRouter.getRefundAgentTools())
             .build();
 
-        this.knowledgeClient = chatClientBuilder.clone()
+        this.knowledgeClient = ChatClient.builder(chatModel)
             .defaultSystem("""
                 You are a Knowledge Support Agent for an e-commerce platform.
                 Answer questions about policies, FAQs, product information, and general inquiries.
@@ -116,9 +123,10 @@ public class SupportGraph {
                 If the customer shared personal information earlier in the conversation, remember and use it.
                 """)
             .defaultTools(knowledgeTools, askUserQuestionTool)
+            .defaultToolCallbacks(mcpToolRouter.getKnowledgeAgentTools())
             .build();
 
-        this.escalationClient = chatClientBuilder.clone()
+        this.escalationClient = ChatClient.builder(chatModel)
             .defaultSystem("""
                 You are an Escalation Agent for an e-commerce platform.
                 Create support tickets, transfer to human agents, schedule callbacks, and triage issues.

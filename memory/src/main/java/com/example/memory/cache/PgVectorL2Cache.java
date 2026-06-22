@@ -29,10 +29,17 @@ public class PgVectorL2Cache {
 
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingService embeddingService;
+    private final QueryClassifier queryClassifier;
 
-    public PgVectorL2Cache(JdbcTemplate jdbcTemplate, EmbeddingService embeddingService) {
+    public PgVectorL2Cache(JdbcTemplate jdbcTemplate, EmbeddingService embeddingService,
+                           QueryClassifier queryClassifier) {
         this.jdbcTemplate = jdbcTemplate;
         this.embeddingService = embeddingService;
+        this.queryClassifier = queryClassifier;
+    }
+
+    private QueryType classifyQuery(String query) {
+        return queryClassifier.classify(query);
     }
 
     /**
@@ -41,6 +48,7 @@ public class PgVectorL2Cache {
     public Optional<CacheEntry> get(UUID tenantId, String query) {
         float[] embedding = embeddingService.embed(query);
         String vectorLiteral = toVectorLiteral(embedding);
+        QueryType queryType = classifyQuery(query);
 
         try {
             List<CacheEntry> results = jdbcTemplate.query(
@@ -51,6 +59,7 @@ public class PgVectorL2Cache {
                        1 - (query_embedding <=> ?::vector) AS similarity
                 FROM response_cache
                 WHERE tenant_id = ?::uuid
+                  AND query_type = ?
                   AND expires_at > NOW()
                   AND 1 - (query_embedding <=> ?::vector) > ?
                 ORDER BY similarity DESC
@@ -64,6 +73,7 @@ public class PgVectorL2Cache {
                 ),
                 vectorLiteral,
                 tenantId.toString(),
+                queryType.name(),
                 vectorLiteral,
                 SIMILARITY_THRESHOLD
             );

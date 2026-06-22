@@ -6,6 +6,7 @@ COPY core/build.gradle core/build.gradle
 COPY memory/build.gradle memory/build.gradle
 COPY ecommerce/build.gradle ecommerce/build.gradle
 COPY agents/build.gradle agents/build.gradle
+COPY ecommerce-mcp/build.gradle ecommerce-mcp/build.gradle
 COPY admin/build.gradle admin/build.gradle
 COPY api/build.gradle api/build.gradle
 

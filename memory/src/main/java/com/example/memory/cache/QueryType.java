@@ -27,4 +27,13 @@ public enum QueryType {
     public long getTtlSeconds() {
         return ttl.toSeconds();
     }
+
+    /**
+     * Whether responses for this query type should be cached.
+     * Transactional queries (order/refund status) return user-specific data
+     * and must never be served from cache.
+     */
+    public boolean isCacheable() {
+        return this != ORDER_STATUS && this != REFUND_STATUS;
+    }
 }

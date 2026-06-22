@@ -47,6 +47,14 @@ public class SemanticCacheService {
     public Optional<CachedResponse> lookup(UUID tenantId, String query) {
         QueryType queryType = queryClassifier.classify(query);
 
+        // Skip cache for transactional queries (order/refund status) —
+        // responses are user-specific and must not be served from cache
+        if (!queryType.isCacheable()) {
+            log.debug("Cache SKIP for tenant {} type {} (not cacheable)", tenantId, queryType);
+            cacheMetrics.recordMiss(tenantId);
+            return Optional.empty();
+        }
+
         // L1: Redis exact-match (fastest)
         Optional<CacheEntry> l1Result = l1Cache.get(tenantId, query);
         if (l1Result.isPresent()) {
@@ -77,6 +85,13 @@ public class SemanticCacheService {
      */
     public void storeResponse(UUID tenantId, String query, String response) {
         QueryType queryType = queryClassifier.classify(query);
+
+        // Don't cache transactional queries — responses are user-specific
+        if (!queryType.isCacheable()) {
+            log.debug("Cache SKIP store for tenant {} type {} (not cacheable)", tenantId, queryType);
+            return;
+        }
+
         CacheEntry entry = CacheEntry.of(response, queryType);
 
         l1Cache.put(tenantId, query, entry);

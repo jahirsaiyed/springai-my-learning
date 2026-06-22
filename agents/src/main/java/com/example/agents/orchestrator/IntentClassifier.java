@@ -1,57 +1,94 @@
 package com.example.agents.orchestrator;
 
 import com.example.agents.AgentType;
-import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * Classifies user intent to route to the appropriate subagent.
- * Uses LLM for nuanced understanding with keyword fallback.
+ * Uses keyword fast-path then LLM fallback with conversation history context.
  */
 @Component
 public class IntentClassifier {
 
-    private final ChatClient classifierClient;
+    private static final int MAX_HISTORY_MESSAGES = 6;
+
+    private static final String SYSTEM_PROMPT = """
+        You are an intent classifier for a customer support system.
+        Given the conversation history and the latest customer message,
+        classify the intent into exactly ONE category:
+
+        ORDER - Order lookup, tracking, shipment status, delivery questions, order cancellation
+        REFUND - Refund requests, return requests, money back, overcharges, refund status
+        KNOWLEDGE - Policy questions, FAQ, product information, general inquiries
+        ESCALATION - Explicit request for human agent, complaints, unresolved frustration
+
+        Respond with ONLY the category name (ORDER, REFUND, KNOWLEDGE, or ESCALATION).
+        Nothing else.
+        """;
+
+    private final ChatModel chatModel;
 
     public IntentClassifier(ChatModel chatModel) {
-        this.classifierClient = ChatClient.builder(chatModel)
-            .defaultSystem("""
-                You are an intent classifier for a customer support system.
-                Classify the customer's message into exactly ONE of these categories:
-
-                ORDER - Order lookup, tracking, shipment status, delivery questions, order cancellation
-                REFUND - Refund requests, return requests, money back, overcharges, refund status
-                KNOWLEDGE - Policy questions, FAQ, product information, general "how to" questions
-                ESCALATION - Explicit request for human agent, complaints, unresolved frustration
-
-                Respond with ONLY the category name (ORDER, REFUND, KNOWLEDGE, or ESCALATION).
-                Nothing else.
-                """)
-            .build();
+        this.chatModel = chatModel;
     }
 
     public IntentClassification classify(String userMessage) {
+        return classify(userMessage, List.of());
+    }
+
+    public IntentClassification classify(String userMessage, List<Message> conversationHistory) {
         // Quick keyword-based classification for common patterns
         IntentClassification keywordResult = keywordClassify(userMessage);
         if (keywordResult.isHighConfidence()) {
             return keywordResult;
         }
 
-        // Fall back to LLM classification for ambiguous messages
+        // Fall back to LLM classification with conversation context for ambiguous messages
         try {
-            String result = classifierClient.prompt()
-                .user(userMessage)
-                .call()
-                .content();
+            String classificationPrompt = buildClassificationPrompt(userMessage, conversationHistory);
+            Prompt prompt = new Prompt(List.of(
+                new org.springframework.ai.chat.messages.SystemMessage(SYSTEM_PROMPT),
+                new UserMessage(classificationPrompt)
+            ));
+            String result = chatModel.call(prompt)
+                .getResult()
+                .getOutput()
+                .getText()
+                .trim()
+                .toUpperCase();
 
-            AgentType agentType = parseAgentType(result.trim().toUpperCase());
+            AgentType agentType = parseAgentType(result);
             return new IntentClassification(agentType, 0.85, "LLM classification: " + result);
         } catch (Exception e) {
             // Default to knowledge agent on classification failure
             return new IntentClassification(AgentType.KNOWLEDGE, 0.5,
                 "Classification failed, defaulting to knowledge");
         }
+    }
+
+    private String buildClassificationPrompt(String userMessage, List<Message> history) {
+        StringBuilder sb = new StringBuilder();
+
+        if (!history.isEmpty()) {
+            sb.append("CONVERSATION HISTORY:\n");
+            int start = Math.max(0, history.size() - MAX_HISTORY_MESSAGES);
+            for (int i = start; i < history.size(); i++) {
+                Message msg = history.get(i);
+                String role = (msg instanceof AssistantMessage) ? "AGENT" : "CUSTOMER";
+                sb.append(role).append(": ").append(msg.getText()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        sb.append("LATEST MESSAGE:\n").append(userMessage);
+        return sb.toString();
     }
 
     private IntentClassification keywordClassify(String message) {

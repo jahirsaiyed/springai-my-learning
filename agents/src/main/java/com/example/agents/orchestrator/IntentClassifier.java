@@ -44,6 +44,10 @@ public class IntentClassifier {
     }
 
     public IntentClassification classify(String userMessage, List<Message> conversationHistory) {
+        if (conversationHistory == null) {
+            conversationHistory = List.of();
+        }
+
         // Quick keyword-based classification for common patterns
         IntentClassification keywordResult = keywordClassify(userMessage);
         if (keywordResult.isHighConfidence()) {

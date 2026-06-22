@@ -70,6 +70,23 @@ public class ResilientToolCallback implements ToolCallback {
      */
     @Override
     public String call(String toolInput) {
+        return callWithResilience(toolInput, null);
+    }
+
+    /**
+     * Executes the tool call with retry and circuit breaker protection, preserving ToolContext.
+     * Never throws; returns {@code MCP_UNAVAILABLE: ...} on exhausted retries or open circuit.
+     */
+    @Override
+    public String call(String toolInput, ToolContext toolContext) {
+        return callWithResilience(toolInput, toolContext);
+    }
+
+    /**
+     * Internal resilience logic: retry with exponential backoff and circuit breaker.
+     * Calls delegate with ToolContext if available, otherwise falls back to String-only call.
+     */
+    private String callWithResilience(String toolInput, ToolContext toolContext) {
         if (isCircuitOpen()) {
             log.warn("Circuit breaker OPEN for tool '{}' — returning unavailable",
                     delegate.getToolDefinition().name());
@@ -82,7 +99,9 @@ public class ResilientToolCallback implements ToolCallback {
 
         for (int attempt = 1; attempt <= totalAttempts; attempt++) {
             try {
-                String result = delegate.call(toolInput);
+                String result = (toolContext != null)
+                    ? delegate.call(toolInput, toolContext)
+                    : delegate.call(toolInput);
                 onSuccess();
                 return result;
             } catch (Exception ex) {
@@ -100,12 +119,6 @@ public class ResilientToolCallback implements ToolCallback {
         // All attempts exhausted
         onCallSequenceFailed(lastException);
         return UNAVAILABLE_MESSAGE;
-    }
-
-    /** Resilience logic lives in {@link #call(String)}; ToolContext is ignored. */
-    @Override
-    public String call(String toolInput, ToolContext toolContext) {
-        return call(toolInput);
     }
 
     // --- Consecutive failure tracking (public API for orchestrator) ---
